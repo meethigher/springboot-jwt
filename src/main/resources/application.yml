@@ -1,0 +1,20 @@
+#logging:
+#  config: classpath:logback.xml
+server:
+  port: 9090
+  ssl:
+    enabled: false
+spring:
+  datasource:
+    driver-class-name: org.sqlite.JDBC
+    url: jdbc:sqlite:D:/sqliteData/jwt.db
+  jpa:
+    database-platform: org.sqlite.hibernate.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    show-sql: true
+  mvc:
+    async:
+      request-timeout: 30000
