@@ -2,7 +2,10 @@
 
 最近一直想写一个类似于待办的东西，由于不想用传统的session，就卡住了，后来在各种群里扯皮，发现除了用缓存之外，还可以通过 JWT 来实现。
 
-官网入口[JSON Web Token Introduction - jwt.io](https://jwt.io/introduction)
+参考
+
+* [JSON Web Token Introduction - jwt.io](https://jwt.io/introduction)
+* [Spring Data JPA(二)：SpringBoot集成H2_郑龙飞-CSDN博客](https://blog.csdn.net/dandandeshangni/article/details/79668641)
 
 # 一、了解JWT
 
@@ -101,7 +104,7 @@ String signature=HMACSHA256(headerPayload,secret)
 
 jwt最终的结构，就是将header的base64，payload的base64，signature加密后的值，用`.`来分割，拼成一串字符串。
 
-{% asset_img 1.jpg %}
+![](https://meethigher.top/blog/2021/jwt/1.jpg)
 
 # 三、使用JWT
 
@@ -222,3 +225,193 @@ public class JWTUtils {
 
 ## 3.3 整合springboot
 
+关键代码
+
+pom.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.3.1.RELEASE</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+    <groupId>top.meethigher</groupId>
+    <artifactId>springboot-jwt</artifactId>
+    <version>1.0.0</version>
+    <name>springboot-jwt</name>
+    <description>chenchuancheng&apos;s demo</description>
+    <properties>
+        <java.version>1.8</java.version>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.xerial/sqlite-jdbc -->
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.34.0</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.github.gwenn/sqlite-dialect -->
+        <dependency>
+            <groupId>com.github.gwenn</groupId>
+            <artifactId>sqlite-dialect</artifactId>
+            <version>0.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>io.springfox</groupId>
+            <artifactId>springfox-boot-starter</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.springfox</groupId>
+            <artifactId>springfox-swagger-ui</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.auth0/java-jwt -->
+        <dependency>
+            <groupId>com.auth0</groupId>
+            <artifactId>java-jwt</artifactId>
+            <version>3.18.2</version>
+        </dependency>
+
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
+```
+
+application.yml
+
+```yaml
+#logging:
+#  config: classpath:logback.xml
+server:
+  port: 9090
+  ssl:
+    enabled: false
+spring:
+  datasource:
+    driver-class-name: org.sqlite.JDBC
+    url: jdbc:sqlite:D:/sqliteData/jwt.db
+  jpa:
+    database-platform: org.sqlite.hibernate.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    show-sql: true
+  mvc:
+    async:
+      request-timeout: 30000
+```
+
+SwaggerConfig
+
+```java
+@Configuration
+public class SwaggerConfig {
+    //配置swagger的实例
+    @Bean
+    public Docket api() {
+        return new Docket(DocumentationType.SWAGGER_2)
+                .apiInfo(apiInfo())
+                .select()
+                //只显示包含Api注解的，如果不加这个，会有basic-error-controller显示
+                .apis(RequestHandlerSelectors.withClassAnnotation(Api.class))
+                .paths(PathSelectors.any())
+                .build();
+    }
+    private ApiInfo apiInfo() {
+        return new ApiInfoBuilder()
+                .title("API接口文档")
+                .description("API接口文档")
+                .version("1.0")
+                .build();
+    }
+
+}
+```
+
+InterceptorConfig
+
+```java
+@Configuration
+public class InterceptorConfig implements WebMvcConfigurer {
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new LoginInterceptor())
+                .addPathPatterns("/user/*")
+                .excludePathPatterns("/user/login");
+    }
+}
+```
+
+LoginInterceptor
+
+```java
+public class LoginInterceptor implements HandlerInterceptor {
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        String token = request.getHeader("token");
+        HashMap<String, String> map = new HashMap<>();
+        try {
+            DecodedJWT tokenInfo = JWTUtils.getTokenInfo(token);
+        }catch (SignatureVerificationException e) {
+            e.printStackTrace();
+            map.put("desc","无效签名");
+        }catch (TokenExpiredException e) {
+            e.printStackTrace();
+            map.put("desc","token过期");
+        }catch (AlgorithmMismatchException e) {
+            e.printStackTrace();
+            map.put("desc","token算法不一致");
+        }catch (Exception e) {
+            e.printStackTrace();
+            map.put("desc","无效token");
+        }
+        //如果没有异常，就放行
+        if(!ObjectUtils.isEmpty(map)) {
+            //转为json，发回给前端
+            String json = new ObjectMapper().writeValueAsString(map);
+            response.setContentType("application/json;charset=utf-8");
+            response.getWriter().println(json);
+            return false;
+        }
+        return true;
+    }
+}
+```
